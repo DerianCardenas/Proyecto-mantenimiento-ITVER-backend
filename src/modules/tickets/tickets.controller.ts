@@ -7,11 +7,10 @@ import { Request, Response } from 'express';
 import { validateSync } from '../../middleware/validate';
 import * as ticketService from './tickets.service';
 import { successResponse, errorResponse, paginatedResponse, notFoundResponse } from '../../utils/response';
-import { AppError } from '../../middleware/errorHandler';
 import { CreateTicketDto, UpdateTicketDto, UpdateStatusDto, TicketQueryDto } from './tickets.dto';
-import { Ticket } from '../../types';
+import { TicketStatus } from '../../types';
 
-export const list = async (req: Request, res: Response): Promise<void> => {
+export const list = async (req: Request, res: Response) => {
   try {
     const result = validateSync(TicketQueryDto, req.query);
     if (!result.success) {
@@ -37,7 +36,7 @@ export const list = async (req: Request, res: Response): Promise<void> => {
       page: data.page,
       limit: data.limit,
       sort: data.sort || 'created_at DESC',
-    });
+    }, (req as any).dbClient);
 
     paginatedResponse(res, tickets, total, page, limit, 'Tickets encontrados');
   } catch (err: any) {
@@ -45,9 +44,9 @@ export const list = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const getById = async (req: Request, res: Response): Promise<void> => {
+export const getById = async (req: Request, res: Response) => {
   try {
-    const ticket = await ticketService.getTicketById(req.params.id);
+    const ticket = await ticketService.getTicketById(req.params.id, (req as any).dbClient);
     if (!ticket) {
       return notFoundResponse(res, 'Ticket no encontrado');
     }
@@ -57,7 +56,7 @@ export const getById = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const create = async (req: Request, res: Response): Promise<void> => {
+export const create = async (req: Request, res: Response) => {
   try {
     const result = validateSync(CreateTicketDto, req.body);
     if (!result.success) {
@@ -81,7 +80,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     const ticket = await ticketService.createTicket({
       ...data,
       createdBy: requester.id,
-    });
+    }, (req as any).dbClient);
 
     res.status(201).json({ success: true, data: ticket, message: 'Ticket creado exitosamente' });
   } catch (err: any) {
@@ -89,7 +88,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const update = async (req: Request, res: Response): Promise<void> => {
+export const update = async (req: Request, res: Response) => {
   try {
     const result = validateSync(UpdateTicketDto, req.body);
     if (!result.success) {
@@ -98,7 +97,7 @@ export const update = async (req: Request, res: Response): Promise<void> => {
     }
 
     const data = result.data as Record<string, unknown>;
-    const ticket = await ticketService.updateTicket(req.params.id, data);
+    const ticket = await ticketService.updateTicket(req.params.id, data, (req as any).dbClient);
 
     if (!ticket) {
       return notFoundResponse(res, 'Ticket no encontrado');
@@ -110,7 +109,7 @@ export const update = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const updateStatus = async (req: Request, res: Response): Promise<void> => {
+export const updateStatus = async (req: Request, res: Response) => {
   try {
     const result = validateSync(UpdateStatusDto, req.body);
     if (!result.success) {
@@ -119,7 +118,7 @@ export const updateStatus = async (req: Request, res: Response): Promise<void> =
     }
 
     const data = result.data as { status: string };
-    const ticket = await ticketService.updateStatus(req.params.id, data.status);
+    const ticket = await ticketService.updateStatus(req.params.id, data.status as TicketStatus, (req as any).dbClient);
 
     if (!ticket) {
       return notFoundResponse(res, 'Ticket no encontrado');
@@ -131,9 +130,9 @@ export const updateStatus = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-export const remove = async (req: Request, res: Response): Promise<void> => {
+export const remove = async (req: Request, res: Response) => {
   try {
-    const deleted = await ticketService.deleteTicket(req.params.id);
+    const deleted = await ticketService.deleteTicket(req.params.id, (req as any).dbClient);
     if (!deleted) {
       return notFoundResponse(res, 'Ticket no encontrado');
     }
@@ -143,10 +142,9 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const getStats = async (req: Request, res: Response): Promise<void> => {
+export const getStats = async (req: Request, res: Response) => {
   try {
-    const requester = req.user as { role: string };
-    const stats = await ticketService.getStats();
+    const stats = await ticketService.getStats((req as any).dbClient);
     successResponse(res, stats, 'Estadísticas de tickets');
   } catch (err: any) {
     errorResponse(res, err.message || 'Error al obtener estadísticas', 500);

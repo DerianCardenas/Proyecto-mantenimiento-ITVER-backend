@@ -34,7 +34,7 @@ export const LoginResponseDto = z.object({
 });
 
 export const UpdateUserDto = z.object({
-  fullName: z.string().optional().min(1),
+  fullName: z.string().min(1).optional(),
   role: z.enum(['admin', 'technician', 'receptionist']).optional(),
 });
 

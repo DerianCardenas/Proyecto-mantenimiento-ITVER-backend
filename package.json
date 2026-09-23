@@ -2,14 +2,13 @@
   "name": "sgm-itver-backend",
   "version": "1.0.0",
   "description": "Backend API para SGM-ITVER - Sistema de Gestión y Seguimiento de Mantenimiento",
-  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "db:seed": "psql -f migrations/001_initial_schema.sql",
-    "db:migrate": "psql -f migrations/001_initial_schema.sql"
+    "db:migrate": "psql -v ON_ERROR_STOP=1 -f migrations/001_initial_schema.sql -f migrations/002_force_rls.sql",
+    "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
@@ -19,8 +18,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.13.1",
     "multer": "^1.4.5-lts.1",
+    "pg": "^8.13.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -30,7 +29,12 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.12",
     "@types/node": "^20.14.10",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3"
+  },
+  "allowScripts": {
+    "bcrypt@5.1.1": true,
+    "esbuild@0.28.2": true
   }
 }

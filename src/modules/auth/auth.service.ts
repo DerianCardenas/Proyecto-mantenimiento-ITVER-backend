@@ -5,7 +5,7 @@
 // ============================================================
 
 import bcrypt from 'bcrypt';
-import { pool } from '../../config/database';
+import { pool, withServiceClient } from '../../config/database';
 import { generateToken } from '../../config/auth';
 import { snakeToCamel } from '../../utils/snakeCase';
 import { UserResponse } from '../../types';
@@ -29,11 +29,14 @@ export async function registerUser(data: {
 }): Promise<UserResponse> {
   const hashedPassword = await hashPassword(data.password);
 
-  const result = await pool.query(
-    `INSERT INTO users (username, email, password_hash, role, full_name, is_active, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
-     RETURNING *`,
-    [data.username, data.email, hashedPassword, data.role, data.fullName]
+  // Service context: no RLS user session exists during registration
+  const result = await withServiceClient((client) =>
+    client.query(
+      `INSERT INTO users (username, email, password_hash, role, full_name, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
+       RETURNING *`,
+      [data.username, data.email, hashedPassword, data.role, data.fullName]
+    )
   );
 
   const row = snakeToCamel(result.rows[0]) as Record<string, unknown>;
@@ -52,7 +55,10 @@ export async function registerUser(data: {
 }
 
 export async function loginUser(email: string, password: string): Promise<{ token: string; user: UserResponse }> {
-  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+  // Service context: no RLS user session exists yet during login
+  const result = await withServiceClient((client) =>
+    client.query('SELECT * FROM users WHERE email = $1', [email])
+  );
 
   if (result.rowCount === 0) {
     throw new Error('Credenciales inválidas');
@@ -87,8 +93,8 @@ export async function loginUser(email: string, password: string): Promise<{ toke
   return { token, user };
 }
 
-export async function getUserById(id: string): Promise<UserResponse | null> {
-  const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+export async function getUserById(id: string, db: any = pool): Promise<UserResponse | null> {
+  const result = await db.query('SELECT * FROM users WHERE id = $1', [id]);
 
   if (result.rowCount === 0) {
     return null;
@@ -108,10 +114,10 @@ export async function getUserById(id: string): Promise<UserResponse | null> {
   } as UserResponse;
 }
 
-export async function listUsers(): Promise<UserResponse[]> {
-  const result = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
+export async function listUsers(db: any = pool): Promise<UserResponse[]> {
+  const result = await db.query('SELECT * FROM users ORDER BY created_at DESC');
 
-  return result.rows.map((row) => {
+  return result.rows.map((row: Record<string, unknown>) => {
     const camel = snakeToCamel(row) as Record<string, unknown>;
     const { passwordHash: _pw, ...userWithoutPassword } = camel;
     return {
@@ -126,14 +132,14 @@ export async function listUsers(): Promise<UserResponse[]> {
   });
 }
 
-export async function updateUser(id: string, data: { fullName?: string; role?: string }): Promise<UserResponse | null> {
-  const existing = await getUserById(id);
+export async function updateUser(id: string, data: { fullName?: string; role?: string }, db: any = pool): Promise<UserResponse | null> {
+  const existing = await getUserById(id, db);
   if (!existing) return null;
 
   const fullName = data.fullName ?? existing.fullName;
   const role = data.role ?? existing.role;
 
-  const result = await pool.query(
+  const result = await db.query(
     `UPDATE users SET full_name = $1, role = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
     [fullName, role, id]
   );

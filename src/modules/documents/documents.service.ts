@@ -10,10 +10,13 @@ import { snakeToCamel, snakeToCamelArray } from '../../utils/snakeCase';
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { TicketDocument } from '../../types';
 
+type DB = any;
+
 export async function uploadDocument(
   ticketId: string,
   file: Express.Multer.File,
-  userId: string
+  userId: string,
+  db: DB = pool
 ): Promise<TicketDocument> {
   const fileKey = generateFileKey(file.originalname, ticketId);
 
@@ -27,11 +30,8 @@ export async function uploadDocument(
 
   await s3Client.send(new PutObjectCommand(uploadParams));
 
-  // Generate presigned URL for download
-  const downloadUrl = await getPresignedUrl(fileKey);
-
   // Store metadata in database
-  const result = await pool.query(
+  const result = await db.query(
     `INSERT INTO ticket_documents (ticket_id, file_key, original_name, mime_type, file_size, uploaded_by, uploaded_at)
      VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
     [ticketId, fileKey, file.originalname, file.mimetype || null, file.size || null, userId]
@@ -40,8 +40,8 @@ export async function uploadDocument(
   return snakeToCamel(result.rows[0]) as unknown as TicketDocument;
 }
 
-export async function getDocumentsByTicket(ticketId: string): Promise<TicketDocument[]> {
-  const result = await pool.query(
+export async function getDocumentsByTicket(ticketId: string, db: DB = pool): Promise<TicketDocument[]> {
+  const result = await db.query(
     `SELECT * FROM ticket_documents WHERE ticket_id = $1 ORDER BY uploaded_at DESC`,
     [ticketId]
   );
@@ -49,8 +49,8 @@ export async function getDocumentsByTicket(ticketId: string): Promise<TicketDocu
   return snakeToCamelArray(result.rows) as unknown as TicketDocument[];
 }
 
-export async function getDocument(fileKey: string): Promise<{ document: TicketDocument; downloadUrl: string } | null> {
-  const result = await pool.query(
+export async function getDocument(fileKey: string, db: DB = pool): Promise<{ document: TicketDocument; downloadUrl: string } | null> {
+  const result = await db.query(
     `SELECT * FROM ticket_documents WHERE file_key = $1`,
     [fileKey]
   );
@@ -63,8 +63,8 @@ export async function getDocument(fileKey: string): Promise<{ document: TicketDo
   return { document, downloadUrl };
 }
 
-export async function deleteDocument(id: string): Promise<boolean> {
-  const docResult = await pool.query('SELECT file_key FROM ticket_documents WHERE id = $1', [id]);
+export async function deleteDocument(id: string, db: DB = pool): Promise<boolean> {
+  const docResult = await db.query('SELECT file_key FROM ticket_documents WHERE id = $1', [id]);
 
   if (docResult.rowCount === 0) return false;
 
@@ -77,7 +77,7 @@ export async function deleteDocument(id: string): Promise<boolean> {
   }));
 
   // Delete from DB (cascade handles this if FK is set up, but we do it explicitly)
-  await pool.query('DELETE FROM ticket_documents WHERE id = $1', [id]);
+  await db.query('DELETE FROM ticket_documents WHERE id = $1', [id]);
 
   return true;
 }

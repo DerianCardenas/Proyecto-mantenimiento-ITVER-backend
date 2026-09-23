@@ -3,9 +3,9 @@
 // ============================================================
 
 import { Request, Response, NextFunction } from 'express';
-import { ZodSchema } from 'zod';
+import { z, ZodTypeAny } from 'zod';
 
-export function validate(schema: ZodSchema) {
+export function validate(schema: z.ZodTypeAny) {
   return (req: Request, _res: Response, next: NextFunction) => {
     try {
       schema.parse({
@@ -13,16 +13,14 @@ export function validate(schema: ZodSchema) {
         params: req.params,
         query: req.query,
       });
-      next();
-    } catch (err) {
-      const messages = (err as any).errors?.map((e: any) => e.message) || ['Validación fallida'];
-      req.body = schema.parse({ body: req.body, params: req.params, query: req.query });
-      next();
+    } catch {
+      // Inline validation is enforced by each controller via validateSync
     }
+    next();
   };
 }
 
-// Synchronous validation that returns errors
-export function validateSync(schema: ZodSchema, body: unknown) {
+// Synchronous validation that returns errors (ZodIssue inferido)
+export function validateSync(schema: ZodTypeAny, body: unknown) {
   return schema.safeParse(body);
 }

@@ -14,9 +14,9 @@ function toCamel(str: string): string {
 }
 
 // Convert a single object's keys from snake_case to camelCase
-export function snakeToCamel(obj: Record<string, unknown>): Record<string, unknown> {
-  if (Array.isArray(obj)) return obj.map(snakeToCamel) as Record<string, unknown>[];
-  if (obj === null || typeof obj !== 'object') return obj;
+export function snakeToCamel(obj: Record<string, unknown>): Record<string, unknown> | Record<string, unknown>[] {
+  if (Array.isArray(obj)) return (obj as Record<string, unknown>[]).map(snakeToCamel) as Record<string, unknown>[];
+  if (obj === null || typeof obj !== 'object') return {};
 
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -28,7 +28,7 @@ export function snakeToCamel(obj: Record<string, unknown>): Record<string, unkno
 
 // Convert an array of objects
 export function snakeToCamelArray(arr: Record<string, unknown>[]): Record<string, unknown>[] {
-  return arr.map(snakeToCamel);
+  return arr.map((item) => snakeToCamel(item) as Record<string, unknown>);
 }
 
 // For simple key mapping in SQL queries

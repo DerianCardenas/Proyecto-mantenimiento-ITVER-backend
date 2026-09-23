@@ -3,7 +3,7 @@
 // Uses pg library with environment variables
 // ============================================================
 
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 
 const config = {
   host: process.env.DB_HOST || 'localhost',
@@ -22,5 +22,31 @@ pool.on('connect', () => {
 pool.on('error', (err) => {
   console.error('[DB] Unexpected error on idle client:', err);
 });
+
+// ============================================================
+// Service-context client (bypasses RLS)
+// Used ONLY for authentication operations (login/register)
+// where a user session does not exist yet.
+// ============================================================
+
+export async function withServiceClient<T>(
+  fn: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Service context: bypass RLS for auth operations.
+    // NEVER use this helper for ticket/document operations.
+    await client.query("SET LOCAL app.bypass_rls = 'true'");
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 
 export default pool;

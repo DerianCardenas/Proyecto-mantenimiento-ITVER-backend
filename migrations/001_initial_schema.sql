@@ -4,12 +4,20 @@
 -- ============================================================
 -- Convención: snake_case en DB, camelCase en API/JSON
 -- RLS habilitado en todas las tablas
+--
+-- IMPORTANTE: RLS usa session variables que el backend establece:
+--   SET LOCAL app.current_user_id = '<uuid>'
+--   SET LOCAL app.current_user_role = 'admin'|'technician'|'receptionist'
+-- El backend lo hace automáticamente en cada request (middleware dbContext).
 
 -- Eliminar tablas en orden correcto (borrado limpio)
 DROP TABLE IF EXISTS ticket_documents CASCADE;
 DROP TABLE IF EXISTS tickets CASCADE;
 DROP TABLE IF EXISTS buildings CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS ticket_status CASCADE;
+DROP TYPE IF EXISTS ticket_priority CASCADE;
 
 -- ============================================================
 -- ENUM TYPES
@@ -99,10 +107,22 @@ ALTER TABLE buildings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_documents ENABLE ROW LEVEL SECURITY;
 
--- Helper function para obtener el role del usuario actual
+-- Helper: ID del usuario actual (leído de app.current_user_id)
+CREATE OR REPLACE FUNCTION current_user_id()
+RETURNS UUID AS $$
+  SELECT NULLIF(current_setting('app.current_user_id', true), '')::uuid;
+$$ LANGUAGE sql STABLE;
+
+-- Helper: rol del usuario actual (leído de app.current_user_role)
 CREATE OR REPLACE FUNCTION current_user_role()
 RETURNS user_role AS $$
-  SELECT role FROM users WHERE id = auth.uid()::uuid;
+  SELECT NULLIF(current_setting('app.current_user_role', true), '')::user_role;
+$$ LANGUAGE sql STABLE;
+
+-- Helper: ¿el usuario actual es admin?
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT current_user_role() = 'admin';
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
@@ -110,94 +130,114 @@ $$ LANGUAGE sql STABLE;
 -- ============================================================
 
 -- USERS
--- Los admins ven todos los usuarios, los usuarios ven su propio perfil
+-- SELECT: admins ven todos; usuarios ven su perfil; service context (bypass) para login/register
 CREATE POLICY "Users can view own profile" ON users
   FOR SELECT USING (
-    auth.uid()::text = id::text
-    OR EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+    current_setting('app.bypass_rls', true) = 'true'
+    OR (current_user_id() IS NOT NULL AND (current_user_id()::text = id::text OR is_admin()))
+  );
+
+-- INSERT: solo service context (registro vía API) o admin
+CREATE POLICY "Only service or admin can insert users" ON users
+  FOR INSERT WITH CHECK (
+    current_setting('app.bypass_rls', true) = 'true'
+    OR is_admin()
   );
 
 CREATE POLICY "Users can update own profile" ON users
   FOR UPDATE USING (
-    auth.uid()::text = id::text
+    current_user_id() IS NOT NULL
+    AND (current_user_id()::text = id::text OR is_admin())
   );
 
 -- BUILDINGS
--- Todos pueden ver edificios (solo lectura para usuarios autenticados)
+-- Todos los usuarios autenticados pueden ver edificios
 CREATE POLICY "Authenticated users can view buildings" ON buildings
   FOR SELECT USING (
-    auth.uid() IS NOT NULL
+    current_user_id() IS NOT NULL
   );
 
 -- TICKETS
--- Los usuarios pueden ver tickets que crearon, que les fueron asignados, o son admins
+-- Usuarios pueden ver tickets que crearon, que les fueron asignados, o son admins
 CREATE POLICY "Users can view own tickets" ON tickets
   FOR SELECT USING (
-    auth.uid()::text = created_by::text
-    OR auth.uid()::text = assigned_to::text
-    OR EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+    current_user_id() IS NOT NULL
+    AND (
+      current_user_id()::text = created_by::text
+      OR current_user_id()::text = assigned_to::text
+      OR is_admin()
+    )
   );
 
--- Los técnicos y admins pueden insertar tickets
-CREATE POLICY "Technicians and admins can create tickets" ON tickets
+-- Cualquier usuario autenticado puede crear tickets
+CREATE POLICY "Authenticated users can create tickets" ON tickets
   FOR INSERT WITH CHECK (
-    auth.uid() IS NOT NULL
+    current_user_id() IS NOT NULL
   );
 
--- Los creadores, asignados o admins pueden actualizar
+-- Creadores, asignados o admins pueden actualizar
 CREATE POLICY "Users can update own tickets" ON tickets
   FOR UPDATE USING (
-    auth.uid()::text = created_by::text
-    OR auth.uid()::text = assigned_to::text
-    OR EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+    current_user_id() IS NOT NULL
+    AND (
+      current_user_id()::text = created_by::text
+      OR current_user_id()::text = assigned_to::text
+      OR is_admin()
+    )
   );
 
--- Los creadores, asignados o admins pueden eliminar
+-- Creadores, asignados o admins pueden eliminar
 CREATE POLICY "Users can delete own tickets" ON tickets
   FOR DELETE USING (
-    auth.uid()::text = created_by::text
-    OR auth.uid()::text = assigned_to::text
-    OR EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+    current_user_id() IS NOT NULL
+    AND (
+      current_user_id()::text = created_by::text
+      OR current_user_id()::text = assigned_to::text
+      OR is_admin()
+    )
   );
 
 -- TICKET_DOCUMENTS
--- Los usuarios pueden ver documentos de tickets propios o asignados
+-- Usuarios ven documentos de tickets propios o asignados
 CREATE POLICY "Users can view documents of own tickets" ON ticket_documents
   FOR SELECT USING (
-    EXISTS (
+    current_user_id() IS NOT NULL
+    AND EXISTS (
       SELECT 1 FROM tickets t
       WHERE t.id = ticket_documents.ticket_id
         AND (
-          auth.uid()::text = t.created_by::text
-          OR auth.uid()::text = t.assigned_to::text
-          OR EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+          current_user_id()::text = t.created_by::text
+          OR current_user_id()::text = t.assigned_to::text
+          OR is_admin()
         )
     )
   );
 
--- Los usuarios pueden insertar documentos en tickets que ven
+-- Usuarios pueden subir documentos a tickets que ven
 CREATE POLICY "Users can insert documents of own tickets" ON ticket_documents
   FOR INSERT WITH CHECK (
-    EXISTS (
+    current_user_id() IS NOT NULL
+    AND EXISTS (
       SELECT 1 FROM tickets t
       WHERE t.id = ticket_documents.ticket_id
         AND (
-          auth.uid()::text = t.created_by::text
-          OR auth.uid()::text = t.assigned_to::text
-          OR EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+          current_user_id()::text = t.created_by::text
+          OR current_user_id()::text = t.assigned_to::text
+          OR is_admin()
         )
     )
   );
 
 CREATE POLICY "Users can delete own documents" ON ticket_documents
   FOR DELETE USING (
-    EXISTS (
+    current_user_id() IS NOT NULL
+    AND EXISTS (
       SELECT 1 FROM tickets t
       WHERE t.id = ticket_documents.ticket_id
         AND (
-          auth.uid()::text = t.created_by::text
-          OR auth.uid()::text = t.assigned_to::text
-          OR EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+          current_user_id()::text = t.created_by::text
+          OR current_user_id()::text = t.assigned_to::text
+          OR is_admin()
         )
     )
   );
@@ -217,12 +257,9 @@ INSERT INTO buildings (name, location) VALUES
   ('Cafeteria', 'Planta Baja'),
   ('Administracion', 'Entrada Principal');
 
--- Usuario admin por defecto (password: admin123)
--- Contraseña encriptada con bcrypt (12 rounds)
--- Generar con: bcrypt.hashSync('admin123', 12)
-INSERT INTO users (username, email, password_hash, role, full_name, is_active) VALUES
-  ('admin', 'admin@itver.edu.mx', '$2a$12$LJ3mY5v8qK9xP2nR7wQ1GeH5sT4dF6rA8bC0eD1fG2hI3jK4lM5nO', 'admin', 'Administrador ITVER', true),
-  ('tecnico1', 'tecnico1@itver.edu.mx', '$2a$12$LJ3mY5v8qK9xP2nR7wQ1GeH5sT4dF6rA8bC0eD1fG2hI3jK4lM5nO', 'technician', 'Técnico Principal', true);
+-- NOTA: El usuario admin se crea con el script de seed del backend:
+--   npm run db:seed
+-- Este script genera el hash bcrypt correcto (no hardcodear hashes).
 
 -- ============================================================
 -- VISTAS para reporting rápido (opcional)
@@ -245,12 +282,16 @@ LEFT JOIN ticket_documents td ON td.ticket_id = t.id
 GROUP BY t.id, u.full_name;
 
 -- ============================================================
--- NOTAS
+-- NOTAS DE OPERACIÓN
 -- ============================================================
--- Para desarrollo local sin JWT auth real, usar el helper:
--- SET LOCAL app.current_user_id = 'uuid-aqui';
+-- El backend establece el contexto de seguridad por request:
+--   BEGIN;
+--   SET LOCAL app.current_user_id = '<uuid>';
+--   SET LOCAL app.current_user_role = '<rol>';
+--   ...queries...
+--   COMMIT;
 --
--- Para producción con Supabase Auth o custom JWT:
--- El middleware establece auth.uid() vía JWT claims
+-- Si se necesita bypass temporal (solo desarrollo local):
+--   ALTER TABLE tickets DISABLE ROW LEVEL SECURITY;
 --
 -- Migraciones futuras en: migrations/002_*.sql

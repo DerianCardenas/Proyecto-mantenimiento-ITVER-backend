@@ -12,6 +12,8 @@ interface TicketWithDocuments extends Ticket {
   documents: TicketDocument[];
 }
 
+type DB = any;
+
 export async function createTicket(data: {
   title: string;
   description: string;
@@ -23,8 +25,8 @@ export async function createTicket(data: {
   observations?: string;
   priority: string;
   createdBy: string;
-}): Promise<Ticket> {
-  const result = await pool.query(
+}, db: DB = pool): Promise<Ticket> {
+  const result = await db.query(
     `INSERT INTO tickets (title, description, building_id, building_name, technician_name, attention_date, recommendations, observations, priority, status, created_by, assigned_to, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, NULL, NOW(), NOW())
      RETURNING *`,
@@ -53,7 +55,7 @@ export async function getTickets(filters: {
   page?: number;
   limit?: number;
   sort?: string;
-}): Promise<{ data: Ticket[]; total: number; page: number; limit: number }> {
+}, db: DB = pool): Promise<{ data: Ticket[]; total: number; page: number; limit: number }> {
   const { page = 1, limit = 10, sort = 'created_at DESC', ...filterParams } = filters;
   const offset = (page - 1) * limit;
 
@@ -84,7 +86,7 @@ export async function getTickets(filters: {
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const countResult = await pool.query(
+  const countResult = await db.query(
     `SELECT COUNT(*) as total FROM tickets ${whereClause}`,
     values
   );
@@ -93,15 +95,15 @@ export async function getTickets(filters: {
   const query = `
     SELECT * FROM tickets ${whereClause} ORDER BY ${sort} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
   `;
-  const dataResult = await pool.query(query, [...values, limit, offset]);
+  const dataResult = await db.query(query, [...values, limit, offset]);
 
   const data = snakeToCamelArray(dataResult.rows) as unknown as Ticket[];
 
   return { data, total, page, limit };
 }
 
-export async function getTicketById(id: string): Promise<TicketWithDocuments | null> {
-  const result = await pool.query(
+export async function getTicketById(id: string, db: DB = pool): Promise<TicketWithDocuments | null> {
+  const result = await db.query(
     `SELECT t.*, json_agg(
       CASE WHEN td.id IS NOT NULL THEN json_build_object(
         'id', td.id,
@@ -125,8 +127,8 @@ export async function getTicketById(id: string): Promise<TicketWithDocuments | n
 
   const row = snakeToCamel(result.rows[0]) as Record<string, unknown>;
   // Handle documents array from json_agg
-  const documents = (row.documents as unknown[]) || [];
-  const cleanDocuments = documents.filter(Boolean).map((doc: Record<string, unknown>) => snakeToCamel(doc) as unknown as TicketDocument);
+  const documents = (row.documents as unknown as Record<string, unknown>[]) || [];
+  const cleanDocuments = documents.filter(Boolean).map((doc) => snakeToCamel(doc) as unknown as TicketDocument);
 
   const ticket = { ...row, documents: cleanDocuments } as unknown as TicketWithDocuments;
   return ticket;
@@ -142,8 +144,8 @@ export async function updateTicket(id: string, data: {
   recommendations?: string;
   observations?: string;
   priority?: string;
-}): Promise<Ticket | null> {
-  const existing = await getTicketById(id);
+}, db: DB = pool): Promise<Ticket | null> {
+  const existing = await getTicketById(id, db);
   if (!existing) return null;
 
   const fields: string[] = [];
@@ -201,17 +203,17 @@ export async function updateTicket(id: string, data: {
   values.push(id);
   const query = `UPDATE tickets SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
 
-  const result = await pool.query(query, values);
+  const result = await db.query(query, values);
   return snakeToCamel(result.rows[0]) as unknown as Ticket;
 }
 
-export async function deleteTicket(id: string): Promise<boolean> {
-  const result = await pool.query('DELETE FROM tickets WHERE id = $1 RETURNING id', [id]);
+export async function deleteTicket(id: string, db: DB = pool): Promise<boolean> {
+  const result = await db.query('DELETE FROM tickets WHERE id = $1 RETURNING id', [id]);
   return result.rowCount !== 0;
 }
 
-export async function updateStatus(id: string, status: TicketStatus): Promise<Ticket | null> {
-  const result = await pool.query(
+export async function updateStatus(id: string, status: TicketStatus, db: DB = pool): Promise<Ticket | null> {
+  const result = await db.query(
     `UPDATE tickets SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
     [status, id]
   );
@@ -220,21 +222,31 @@ export async function updateStatus(id: string, status: TicketStatus): Promise<Ti
   return snakeToCamel(result.rows[0]) as unknown as Ticket;
 }
 
-export async function getStats(): Promise<Record<string, unknown>> {
-  const statusResult = await pool.query(
+export async function getStats(db: DB = pool): Promise<Record<string, unknown>> {
+  const statusResult = await db.query(
     `SELECT status, COUNT(*) as count FROM tickets GROUP BY status ORDER BY status`
   );
-  const statusStats = snakeToCamelArray(statusResult.rows);
+  // COUNT(*) returns bigint (string from pg); normalize to number for the API
+  const statusStats = snakeToCamelArray(statusResult.rows).map((row) => ({
+    ...row,
+    count: parseInt(String(row.count), 10),
+  }));
 
-  const priorityResult = await pool.query(
+  const priorityResult = await db.query(
     `SELECT priority, COUNT(*) as count FROM tickets GROUP BY priority ORDER BY priority`
   );
-  const priorityStats = snakeToCamelArray(priorityResult.rows);
+  const priorityStats = snakeToCamelArray(priorityResult.rows).map((row) => ({
+    ...row,
+    count: parseInt(String(row.count), 10),
+  }));
 
-  const buildingResult = await pool.query(
+  const buildingResult = await db.query(
     `SELECT building_name, COUNT(*) as count FROM tickets WHERE building_name IS NOT NULL GROUP BY building_name ORDER BY building_name`
   );
-  const buildingStats = snakeToCamelArray(buildingResult.rows);
+  const buildingStats = snakeToCamelArray(buildingResult.rows).map((row) => ({
+    ...row,
+    count: parseInt(String(row.count), 10),
+  }));
 
   return {
     byStatus: statusStats,

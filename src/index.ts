@@ -2,6 +2,8 @@
 // Application Entry Point
 // ============================================================
 
+// Load .env FIRST so all modules (database, s3, auth) read config
+import 'dotenv/config';
 import app from './app';
 import { pool } from './config/database';
 import './config/s3'; // Initialize S3 client

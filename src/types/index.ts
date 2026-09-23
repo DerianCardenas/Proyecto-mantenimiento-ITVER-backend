@@ -21,9 +21,9 @@ export interface UserResponse {
   username: string;
   email: string;
   role: string;
-  full_name: string;
-  is_active: boolean;
-  created_at: string;
+  fullName: string;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface Building {
@@ -79,4 +79,5 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   totalPages: number;
+  message?: string;
 }

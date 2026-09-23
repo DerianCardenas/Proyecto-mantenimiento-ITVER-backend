@@ -3,7 +3,7 @@
 // All responses follow the ApiResponse contract
 // ============================================================
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { ApiResponse, PaginatedResponse } from '../types';
 
 export function successResponse<T>(res: Response, data: T, message?: string, status: number = 200): Response {

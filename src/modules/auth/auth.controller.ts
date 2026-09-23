@@ -8,9 +8,8 @@ import { validateSync } from '../../middleware/validate';
 import { RegisterUserDto, LoginUserDto, UpdateUserDto } from './auth.dto';
 import * as authService from './auth.service';
 import { successResponse, errorResponse, createdResponse } from '../../utils/response';
-import { AppError } from '../../middleware/errorHandler';
 
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (req: Request, res: Response) => {
   const result = validateSync(RegisterUserDto, req.body);
   if (!result.success) {
     const messages = result.error?.errors.map((e) => e.message).join(', ') || 'Validación fallida';
@@ -36,7 +35,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req: Request, res: Response) => {
   const result = validateSync(LoginUserDto, req.body);
   if (!result.success) {
     const messages = result.error?.errors.map((e) => e.message).join(', ') || 'Validación fallida';
@@ -52,10 +51,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const getMe = async (req: Request, res: Response): Promise<void> => {
+export const getMe = async (req: Request, res: Response) => {
   try {
     const user = req.user as { id: string; role: string; email: string };
-    const fullUser = await authService.getUserById(user.id);
+    const fullUser = await authService.getUserById(user.id, (req as any).dbClient);
 
     if (!fullUser) {
       return errorResponse(res, 'Usuario no encontrado', 404);
@@ -67,16 +66,16 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const listUsers = async (req: Request, res: Response): Promise<void> => {
+export const listUsers = async (req: Request, res: Response) => {
   try {
-    const users = await authService.listUsers();
+    const users = await authService.listUsers((req as any).dbClient);
     successResponse(res, users, 'Lista de usuarios');
   } catch (err: any) {
     errorResponse(res, err.message || 'Error al listar usuarios', 500);
   }
 };
 
-export const updateUser = async (req: Request, res: Response): Promise<void> => {
+export const updateUser = async (req: Request, res: Response) => {
   try {
     const result = validateSync(UpdateUserDto, req.body);
     if (!result.success) {
@@ -93,7 +92,7 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
       return errorResponse(res, 'No tiene permisos para actualizar este usuario', 403);
     }
 
-    const user = await authService.updateUser(targetId, data);
+    const user = await authService.updateUser(targetId, data, (req as any).dbClient);
     if (!user) {
       return errorResponse(res, 'Usuario no encontrado', 404);
     }

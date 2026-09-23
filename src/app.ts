@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './middleware/errorHandler';
 import { authMiddleware } from './middleware/authMiddleware';
+import { dbContext } from './middleware/dbContext';
 import authRoutes from './modules/auth/auth.routes';
 import ticketsRoutes from './modules/tickets/tickets.routes';
 import documentsRoutes from './modules/documents/documents.routes';
@@ -27,10 +28,11 @@ app.get('/health', (_req, res) => {
 });
 
 // API routes (mounted under /api)
-app.use('/api/auth', authRoutes);
-app.use('/api/tickets', authMiddleware, ticketsRoutes);
-app.use('/api/documents', authMiddleware, documentsRoutes);
-app.use('/api/buildings', buildingsRoutes);
+// dbContext establishes RLS session variables for each request
+app.use('/api/auth', dbContext, authRoutes);
+app.use('/api/tickets', authMiddleware, dbContext, ticketsRoutes);
+app.use('/api/documents', authMiddleware, dbContext, documentsRoutes);
+app.use('/api/buildings', authMiddleware, dbContext, buildingsRoutes);
 
 // Error handling
 app.use(errorHandler);

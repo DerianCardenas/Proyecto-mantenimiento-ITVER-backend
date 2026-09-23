@@ -14,9 +14,10 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // All routes under /api/documents already have authMiddleware from app.ts
+// Static routes MUST be declared before dynamic routes (:ticketId, :id)
+router.get('/download/:fileKey', authMiddleware, documentController.download);
 router.post('/:ticketId', authMiddleware, upload.single('file'), documentController.upload);
 router.get('/:ticketId', authMiddleware, documentController.listByTicket);
-router.get('/download/:fileKey', authMiddleware, documentController.download);
 router.delete('/:id', authMiddleware, documentController.remove);
 
 export default router;
