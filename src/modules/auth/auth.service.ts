@@ -50,6 +50,7 @@ export async function registerUser(data: {
     role: userResponse.role as string,
     fullName: userResponse.fullName as string,
     isActive: userResponse.isActive as boolean,
+    mustChangePassword: userResponse.mustChangePassword as boolean,
     createdAt: userResponse.createdAt as string,
   } as UserResponse;
 }
@@ -65,6 +66,9 @@ export async function loginUser(email: string, password: string): Promise<{ toke
   }
 
   const row = snakeToCamel(result.rows[0]) as Record<string, unknown>;
+  if (!row.isActive) {
+    throw new Error('La cuenta está desactivada. Contacte a administración.');
+  }
   const passwordHash = row.passwordHash as string;
 
   const isValid = await comparePassword(password, passwordHash);
@@ -87,6 +91,7 @@ export async function loginUser(email: string, password: string): Promise<{ toke
     role: userWithoutPassword.role as string,
     fullName: userWithoutPassword.fullName as string,
     isActive: userWithoutPassword.isActive as boolean,
+    mustChangePassword: userWithoutPassword.mustChangePassword as boolean,
     createdAt: userWithoutPassword.createdAt as string,
   } as UserResponse;
 
@@ -110,6 +115,7 @@ export async function getUserById(id: string, db: any = pool): Promise<UserRespo
     role: userWithoutPassword.role as string,
     fullName: userWithoutPassword.fullName as string,
     isActive: userWithoutPassword.isActive as boolean,
+    mustChangePassword: userWithoutPassword.mustChangePassword as boolean,
     createdAt: userWithoutPassword.createdAt as string,
   } as UserResponse;
 }
@@ -127,6 +133,7 @@ export async function listUsers(db: any = pool): Promise<UserResponse[]> {
       role: userWithoutPassword.role as string,
       fullName: userWithoutPassword.fullName as string,
       isActive: userWithoutPassword.isActive as boolean,
+      mustChangePassword: userWithoutPassword.mustChangePassword as boolean,
       createdAt: userWithoutPassword.createdAt as string,
     } as UserResponse;
   });
@@ -154,6 +161,33 @@ export async function updateUser(id: string, data: { fullName?: string; role?: s
     role: userWithoutPassword.role as string,
     fullName: userWithoutPassword.fullName as string,
     isActive: userWithoutPassword.isActive as boolean,
+    mustChangePassword: userWithoutPassword.mustChangePassword as boolean,
+    createdAt: userWithoutPassword.createdAt as string,
+  } as UserResponse;
+}
+
+export async function changePassword(id: string, password: string, db: any = pool): Promise<UserResponse | null> {
+  const passwordHash = await hashPassword(password);
+  const result = await db.query(
+    `UPDATE users
+     SET password_hash = $1, must_change_password = false, updated_at = NOW()
+     WHERE id = $2 AND is_active = true
+     RETURNING *`,
+    [passwordHash, id]
+  );
+
+  if (result.rowCount === 0) return null;
+
+  const row = snakeToCamel(result.rows[0]) as Record<string, unknown>;
+  const { passwordHash: _passwordHash, ...userWithoutPassword } = row;
+  return {
+    id: userWithoutPassword.id as string,
+    username: userWithoutPassword.username as string,
+    email: userWithoutPassword.email as string,
+    role: userWithoutPassword.role as string,
+    fullName: userWithoutPassword.fullName as string,
+    isActive: userWithoutPassword.isActive as boolean,
+    mustChangePassword: userWithoutPassword.mustChangePassword as boolean,
     createdAt: userWithoutPassword.createdAt as string,
   } as UserResponse;
 }

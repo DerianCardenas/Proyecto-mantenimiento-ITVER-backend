@@ -40,6 +40,7 @@ CREATE TABLE users (
     role user_role NOT NULL DEFAULT 'technician',
     full_name VARCHAR(150) NOT NULL,
     is_active BOOLEAN DEFAULT true,
+    must_change_password BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

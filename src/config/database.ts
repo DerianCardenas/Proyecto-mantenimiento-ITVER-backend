@@ -3,7 +3,10 @@
 // Uses pg library with environment variables
 // ============================================================
 
-import { Pool, PoolClient } from 'pg';
+import { Pool, PoolClient, types } from 'pg';
+
+// PostgreSQL DATE is a calendar day, not an instant in a time zone.
+types.setTypeParser(1082, (value: string) => value);
 
 const config = {
   host: process.env.DB_HOST || 'localhost',

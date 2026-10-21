@@ -20,6 +20,10 @@ export const LoginUserDto = z.object({
   password: z.string().min(1, 'La contraseña es obligatoria'),
 });
 
+export const ChangePasswordDto = z.object({
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres').max(128),
+});
+
 export const LoginResponseDto = z.object({
   token: z.string(),
   user: z.object({
@@ -29,6 +33,7 @@ export const LoginResponseDto = z.object({
     role: z.string(),
     fullName: z.string(),
     isActive: z.boolean(),
+    mustChangePassword: z.boolean(),
     createdAt: z.string(),
   }),
 });
@@ -40,5 +45,6 @@ export const UpdateUserDto = z.object({
 
 export type RegisterUserInput = z.infer<typeof RegisterUserDto>;
 export type LoginUserInput = z.infer<typeof LoginUserDto>;
+export type ChangePasswordInput = z.infer<typeof ChangePasswordDto>;
 export type LoginResponse = z.infer<typeof LoginResponseDto>;
 export type UpdateUserInput = z.infer<typeof UpdateUserDto>;

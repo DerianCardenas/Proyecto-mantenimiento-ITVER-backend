@@ -5,7 +5,7 @@
 
 import { Request, Response } from 'express';
 import { validateSync } from '../../middleware/validate';
-import { RegisterUserDto, LoginUserDto, UpdateUserDto } from './auth.dto';
+import { RegisterUserDto, LoginUserDto, UpdateUserDto, ChangePasswordDto } from './auth.dto';
 import * as authService from './auth.service';
 import { successResponse, errorResponse, createdResponse } from '../../utils/response';
 
@@ -66,6 +66,24 @@ export const getMe = async (req: Request, res: Response) => {
   }
 };
 
+export const changePassword = async (req: Request, res: Response) => {
+  const result = validateSync(ChangePasswordDto, req.body);
+  if (!result.success) {
+    const messages = result.error?.errors.map((e) => e.message).join(', ') || 'Validación fallida';
+    return errorResponse(res, messages, 400);
+  }
+
+  try {
+    const user = req.user as { id: string };
+    const data = result.data as { password: string };
+    const updatedUser = await authService.changePassword(user.id, data.password, (req as any).dbClient);
+    if (!updatedUser) return errorResponse(res, 'La cuenta no está disponible', 404);
+    successResponse(res, updatedUser, 'Contraseña actualizada');
+  } catch (err: any) {
+    errorResponse(res, err.message || 'Error al actualizar la contraseña', 500);
+  }
+};
+
 export const listUsers = async (req: Request, res: Response) => {
   try {
     const users = await authService.listUsers((req as any).dbClient);
@@ -88,7 +106,7 @@ export const updateUser = async (req: Request, res: Response) => {
     const targetId = req.params.id;
 
     // Only admin or the user themselves can update
-    if (requester.role !== 'admin' && requester.id !== targetId) {
+    if (requester.role !== 'admin' && (requester.id !== targetId || data.role !== undefined)) {
       return errorResponse(res, 'No tiene permisos para actualizar este usuario', 403);
     }
 

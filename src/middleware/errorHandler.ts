@@ -16,6 +16,11 @@ export function errorHandler(
     return res.status(503).json({ success: false, error: 'Servicio de base de datos no disponible' });
   }
 
+  const statusCode = (err as Error & { statusCode?: number }).statusCode;
+  if (statusCode && statusCode >= 400 && statusCode < 500) {
+    return res.status(statusCode).json({ success: false, error: err.message });
+  }
+
   return res.status(500).json({
     success: false,
     error: process.env.NODE_ENV === 'production' ? 'Error interno del servidor' : err.message,

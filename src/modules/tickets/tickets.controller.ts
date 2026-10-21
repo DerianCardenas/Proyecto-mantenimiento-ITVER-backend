@@ -70,6 +70,7 @@ export const create = async (req: Request, res: Response) => {
       buildingId?: number;
       buildingName?: string;
       technicianName?: string;
+      assignedTo?: string | null;
       attentionDate?: string;
       recommendations?: string;
       observations?: string;

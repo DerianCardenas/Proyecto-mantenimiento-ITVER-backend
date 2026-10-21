@@ -4,7 +4,7 @@
 // All DB columns are snake_case; transforms to camelCase via snakeToCamel
 // ============================================================
 
-import { pool } from '../../config/database';
+import { pool, withServiceClient } from '../../config/database';
 import { snakeToCamel, snakeToCamelArray } from '../../utils/snakeCase';
 import { Ticket, TicketDocument, TicketStatus, TicketPriority } from '../../types';
 
@@ -20,27 +20,32 @@ export async function createTicket(data: {
   buildingId?: number;
   buildingName?: string;
   technicianName?: string;
+  assignedTo?: string | null;
   attentionDate?: string;
   recommendations?: string;
   observations?: string;
   priority: string;
   createdBy: string;
 }, db: DB = pool): Promise<Ticket> {
+  const technician = data.assignedTo ? await findActiveTechnician(data.assignedTo) : null;
+  if (data.assignedTo && !technician) throw new Error('El técnico seleccionado no está activo');
+
   const result = await db.query(
     `INSERT INTO tickets (title, description, building_id, building_name, technician_name, attention_date, recommendations, observations, priority, status, created_by, assigned_to, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, NULL, NOW(), NOW())
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, NOW(), NOW())
      RETURNING *`,
     [
       data.title,
       data.description,
       data.buildingId ?? null,
       data.buildingName ?? null,
-      data.technicianName ?? null,
+      technician?.fullName ?? null,
       data.attentionDate ?? null,
       data.recommendations ?? null,
       data.observations ?? null,
       data.priority,
       data.createdBy,
+      technician?.id ?? null,
     ]
   );
 
@@ -140,6 +145,7 @@ export async function updateTicket(id: string, data: {
   buildingId?: number;
   buildingName?: string;
   technicianName?: string;
+  assignedTo?: string | null;
   attentionDate?: string;
   recommendations?: string;
   observations?: string;
@@ -147,6 +153,12 @@ export async function updateTicket(id: string, data: {
 }, db: DB = pool): Promise<Ticket | null> {
   const existing = await getTicketById(id, db);
   if (!existing) return null;
+
+  let technician: { id: string; fullName: string } | null | undefined;
+  if (data.assignedTo !== undefined) {
+    technician = data.assignedTo ? await findActiveTechnician(data.assignedTo) : null;
+    if (data.assignedTo && !technician) throw new Error('El técnico seleccionado no está activo');
+  }
 
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -172,7 +184,14 @@ export async function updateTicket(id: string, data: {
     values.push(data.buildingName);
     paramIndex++;
   }
-  if (data.technicianName !== undefined) {
+  if (data.assignedTo !== undefined) {
+    fields.push(`assigned_to = $${paramIndex}`);
+    values.push(technician?.id ?? null);
+    paramIndex++;
+    fields.push(`technician_name = $${paramIndex}`);
+    values.push(technician?.fullName ?? null);
+    paramIndex++;
+  } else if (data.technicianName !== undefined) {
     fields.push(`technician_name = $${paramIndex}`);
     values.push(data.technicianName);
     paramIndex++;
@@ -205,6 +224,16 @@ export async function updateTicket(id: string, data: {
 
   const result = await db.query(query, values);
   return snakeToCamel(result.rows[0]) as unknown as Ticket;
+}
+
+async function findActiveTechnician(id: string): Promise<{ id: string; fullName: string } | null> {
+  return withServiceClient(async (client) => {
+    const result = await client.query(
+      `SELECT id, full_name FROM users WHERE id = $1 AND role = 'technician' AND is_active = true`,
+      [id]
+    );
+    return result.rowCount ? { id: result.rows[0].id, fullName: result.rows[0].full_name } : null;
+  });
 }
 
 export async function deleteTicket(id: string, db: DB = pool): Promise<boolean> {
