@@ -8,13 +8,35 @@ import { Pool, PoolClient, types } from 'pg';
 // PostgreSQL DATE is a calendar day, not an instant in a time zone.
 types.setTypeParser(1082, (value: string) => value);
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+function env(name: string, developmentFallback: string): string {
+  const value = process.env[name]?.trim();
+  if (value) return value;
+  if (isProduction) throw new Error(`[CONFIG] ${name} is required in production`);
+  return developmentFallback;
+}
+
 const config = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME || 'sgm_itver',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'yourpassword',
+  host: env('DB_HOST', 'localhost'),
+  port: parseInt(env('DB_PORT', '5432'), 10),
+  database: env('DB_NAME', 'sgm_itver'),
+  user: env('DB_USER', 'postgres'),
+  password: env('DB_PASSWORD', 'yourpassword'),
+  application_name: 'sgm-itver-backend',
 };
+
+if (!Number.isInteger(config.port) || config.port <= 0) {
+  throw new Error('[CONFIG] DB_PORT must be a valid positive integer');
+}
+
+if (isProduction && ['postgres', 'root'].includes(config.user.toLowerCase())) {
+  throw new Error('[CONFIG] DB_USER must be a restricted application role in production');
+}
+
+if (isProduction && ['yourpassword', 'your_app_password'].includes(config.password)) {
+  throw new Error('[CONFIG] DB_PASSWORD must not use an example value in production');
+}
 
 export const pool = new Pool(config);
 

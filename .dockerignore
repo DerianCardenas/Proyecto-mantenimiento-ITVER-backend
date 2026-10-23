@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+*.log
+.DS_Store
+.vscode
+.idea
+specs
+contracts
+decisions
+qa-findings.md
+docker-compose.yml
