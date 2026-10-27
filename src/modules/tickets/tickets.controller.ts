@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { validateSync } from '../../middleware/validate';
 import * as ticketService from './tickets.service';
+import { parseSolicitudPdf } from './ticketsImport.service';
 import { successResponse, errorResponse, paginatedResponse, notFoundResponse } from '../../utils/response';
 import { CreateTicketDto, UpdateTicketDto, UpdateStatusDto, TicketQueryDto } from './tickets.dto';
 import { TicketStatus } from '../../types';
@@ -140,6 +141,25 @@ export const remove = async (req: Request, res: Response) => {
     successResponse(res, { id: req.params.id }, 'Ticket eliminado exitosamente');
   } catch (err: any) {
     errorResponse(res, err.message || 'Error al eliminar ticket', 500);
+  }
+};
+
+// Lee un PDF de solicitud y devuelve una sugerencia de ticket (no persiste).
+// El frontend revisa/edita los campos y luego crea el ticket + adjunta el PDF.
+export const importParse = async (req: Request, res: Response) => {
+  try {
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) {
+      return errorResponse(res, 'Archivo PDF requerido', 400);
+    }
+    if (file.mimetype !== 'application/pdf') {
+      return errorResponse(res, 'El archivo debe ser un PDF', 400);
+    }
+
+    const suggestion = await parseSolicitudPdf(file.buffer);
+    successResponse(res, suggestion, 'PDF procesado');
+  } catch (err: any) {
+    errorResponse(res, err.message || 'No se pudo procesar el PDF', 500);
   }
 };
 
