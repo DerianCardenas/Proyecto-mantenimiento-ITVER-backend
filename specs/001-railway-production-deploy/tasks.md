@@ -1,6 +1,6 @@
 # Tasks: Despliegue productivo en Railway
 
-## Estado general: 🔄 En progreso
+## Estado general: ✅ Completado
 
 ## Backend y base de datos
 
@@ -16,19 +16,19 @@
 ## Frontend
 
 - [x] Confirmar build productivo con `VITE_API_URL` definido.
-- [ ] Configurar variables y dominio público en Railway.
-- [ ] Validar fallback SPA y llamadas al backend.
+- [x] Configurar variables y dominio público en Railway.
+- [x] Validar fallback SPA y llamadas al backend.
 
 ## Principal (post-integración)
 
-- [ ] Configurar referencias PostgreSQL y secretos del backend en Railway.
-- [ ] Configurar pre-deploy, healthcheck y dominio del backend.
-- [ ] Sincronizar `VITE_API_URL` y `CORS_ORIGIN`.
-- [ ] Confirmar migraciones, seed y rol `sgm_app` en Railway.
-- [ ] Smoke test de `/health`, login y flujo autenticado.
-- [ ] Revisar si surgieron convenciones para `AGENTS.md`.
-- [ ] Actualizar specs y hallazgos con el resultado real.
-- [ ] Crear commits de ambos repositorios y enviar `main`.
+- [x] Configurar referencias PostgreSQL y secretos del backend en Railway.
+- [x] Configurar pre-deploy, healthcheck y dominio del backend.
+- [x] Sincronizar `VITE_API_URL` y `CORS_ORIGIN`.
+- [x] Confirmar migraciones, seed y rol `sgm_app` en Railway.
+- [x] Smoke test de `/health`, login y flujo autenticado.
+- [x] Revisar si surgieron convenciones para `AGENTS.md`.
+- [x] Actualizar specs y hallazgos con el resultado real.
+- [x] Crear commits de ambos repositorios y enviar `main`.
 
 ## Documentación
 

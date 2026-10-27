@@ -69,6 +69,10 @@ Las variables S3 se configurarán solo con credenciales reales; nunca con los va
 | `.env.example` | separar conexión administrativa y runtime |
 | `src/config/database.ts` | validación productiva de configuración |
 | `src/config/auth.ts` | exigir un secreto JWT real en producción |
+
+## Resultado ejecutado
+
+El plan se completó en Railway. El contenedor escucha en el `PORT=8080` inyectado por la plataforma, las migraciones y el seed corren como pre-deploy y el runtime usa `sgm_app`. El dominio productivo validado es `https://captivating-tenderness-production-6777.up.railway.app`.
 | `src/scripts/migrate.ts` | runner con ledger, lock y provisión de rol |
 | `src/scripts/seed.ts` | seed idempotente sin defaults productivos |
 | Railway | variables, pre-deploy, dominio y healthcheck |

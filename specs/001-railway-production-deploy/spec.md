@@ -56,3 +56,13 @@ El cambio no modifica endpoints ni shapes JSON. Sí modifica el ciclo de vida de
 | `specs/001-railway-production-deploy/original_railway_database.sql` | nuevo | BD |
 | `specs/001-railway-production-deploy/create_railway_bootstrap.sql` | nuevo | BD |
 | configuración del servicio Railway | modificar | infraestructura |
+
+## Resultado de producción
+
+- Backend activo: `https://captivating-tenderness-production-6777.up.railway.app`.
+- Frontend permitido por CORS: `https://hearty-caring-production.up.railway.app`.
+- Railway inyecta `PORT=8080`; el dominio funcional apunta a ese puerto.
+- El pre-deploy aplicó 001, 002 y 003, creó el ledger, preparó el rol restringido `sgm_app` y creó el administrador inicial.
+- `/health`, login y `GET /api/tickets` autenticado respondieron HTTP 200.
+- El primer acceso obliga a establecer una contraseña personal.
+- El dominio generado inicialmente sobre el puerto 3000 quedó sin uso; puede retirarse desde Railway cuando se autorice esa limpieza destructiva.
